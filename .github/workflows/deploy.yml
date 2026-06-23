@@ -44,15 +44,18 @@ jobs:
             --push ./app
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      - name: Inject account ID into task definition
+      - name: Download task definition from AWS
         run: |
-          sed -i "s/ACCOUNT_ID/${{ secrets.AWS_ACCOUNT_ID }}/g" .aws/task-definition.json
+          aws ecs describe-task-definition \
+            --task-definition flask-ecs-fargate \
+            --query taskDefinition \
+            --region $AWS_REGION > task-definition.json
 
       - name: Update task definition with new image
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: .aws/task-definition.json
+          task-definition: task-definition.json
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ steps.build-image.outputs.image }}
 

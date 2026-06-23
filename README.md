@@ -2,7 +2,7 @@
 
 > Production-grade containerized API deployed on AWS ECS Fargate with fully automated CI/CD pipeline via GitHub Actions. Every push to `main` builds, pushes to ECR, and deploys to ECS automatically — zero manual steps.
 
-**Live endpoint:** `http://16.52.32.11:8080/health`
+**Live endpoint:** `https://flask-ecs-fargate-cicd.onrender.com/health`
 
 ---
 

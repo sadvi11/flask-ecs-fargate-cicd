@@ -19,59 +19,30 @@
 ---
 
 ## Architecture
-Developer pushes code
+## Architecture
 
-│
+📐 **[View full architecture diagram →](diagrams/ARCHITECTURE.md)**
 
-▼
-
-GitHub Actions
-
-┌─────────────────────────────────────┐
-
-│ 1. Checkout code                    │
-
-│ 2. Configure AWS credentials        │
-
-│ 3. Login to Amazon ECR              │
-
-│ 4. Build Docker image (linux/amd64) │
-
-│ 5. Push image to ECR (commit SHA)   │
-
-│ 6. Fetch task definition from AWS   │
-
-│ 7. Inject new image into task def   │
-
-│ 8. Deploy to ECS Fargate service    │
-
-└─────────────────────────────────────┘
-
-│
-
-▼
-
-Amazon ECR
-
-(container image registry)
-
-│
-
-▼
-
-ECS Fargate Service
-
-(flask-ecs-cluster / flask-ecs-service)
-
-│
-
-▼
-
-Running Task (ca-central-1)
-
-Flask app on port 8080
-
----
+```mermaid
+flowchart LR
+  Dev(["Developer pushes code"])
+  subgraph GA ["GitHub Actions"]
+    B["Build Docker image"]
+    P["Push to ECR"]
+    D["Deploy to ECS"]
+  end
+  subgraph AWS ["AWS ca-central-1"]
+    ECR["Amazon ECR"]
+    ECS["ECS Fargate"]
+    CW["CloudWatch"]
+  end
+  Dev --> B --> P --> D
+  P -->|push image| ECR
+  D -->|update service| ECS
+  ECS -->|pull image| ECR
+  ECS -->|write logs| CW
+ 
+ 
 
 ## AWS services used
 

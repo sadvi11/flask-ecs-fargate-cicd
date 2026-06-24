@@ -17,33 +17,27 @@
 - Security: AWS credentials stored as GitHub Secrets, never in code
 
 ---
-
-## Architecture
+ 
 ## Architecture
 
 📐 **[View full architecture diagram →](diagrams/ARCHITECTURE.md)**
 
-```mermaid
+mermaid
 flowchart LR
   Dev(["Developer pushes code"])
-  subgraph GA ["GitHub Actions"]
-    B["Build Docker image"]
-    P["Push to ECR"]
-    D["Deploy to ECS"]
-  end
-  subgraph AWS ["AWS ca-central-1"]
-    ECR["Amazon ECR"]
-    ECS["ECS Fargate"]
-    CW["CloudWatch"]
-  end
+  B["Build Docker image"]
+  P["Push to ECR"]
+  D["Deploy to ECS Fargate"]
+  ECR["Amazon ECR"]
+  ECS["ECS Fargate"]
+  CW["CloudWatch"]
   Dev --> B --> P --> D
-  P -->|push image| ECR
-  D -->|update service| ECS
-  ECS -->|pull image| ECR
-  ECS -->|write logs| CW
- 
- 
+  P --> ECR
+  D --> ECS
+  ECS --> ECR
+  ECS --> CW
 
+ 
 ## AWS services used
 
 | Service | Purpose |

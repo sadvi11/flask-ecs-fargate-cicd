@@ -10,7 +10,7 @@
 ## What this project demonstrates
 
 - Containerizing a Python Flask API with Docker (multi-platform `linux/amd64` build)
-- Storing container images in Amazon ECR with immutable tags per commit SHA
+- Storing container images in Amazon ECR with versioned tags per commit SHA 
 - Running containers serverlessly on AWS ECS Fargate — no EC2 instances to manage
 - Automated CI/CD: GitHub Actions pipeline deploys on every push to `main`
 - CloudWatch logging for production observability

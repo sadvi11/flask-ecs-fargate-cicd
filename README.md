@@ -1,6 +1,27 @@
-# Flask ECS Fargate CI/CD
+# Flask on ECS Fargate — Automated CI/CD
 
-> Production-grade containerized API deployed on AWS ECS Fargate with fully automated CI/CD pipeline via GitHub Actions. Every push to `main` builds, pushes to ECR, and deploys to ECS automatically — zero manual steps.
+**Push to `main`, and the container is built, tagged by commit SHA, pushed to ECR and live on Fargate. Zero manual steps.**
+
+[![CI](https://github.com/sadvi11/flask-ecs-fargate-cicd/actions/workflows/ci.yml/badge.svg)](https://github.com/sadvi11/flask-ecs-fargate-cicd/actions/workflows/ci.yml)
+[![Docker](https://img.shields.io/badge/Docker-linux%2Famd64-2496ED?logo=docker&logoColor=white)](https://docker.com)
+[![AWS ECS](https://img.shields.io/badge/AWS-ECS_Fargate-FF9900?logo=amazonaws&logoColor=white)](https://aws.amazon.com/fargate)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+**▶ Live:** https://flask-ecs-fargate-cicd.onrender.com/health
+
+<!-- DEMO SLOT — replace this comment with the demo GIF once recorded:
+     ![Demo](docs/demo.gif)
+     Should show (~20s): commit and push → the Actions run going green → curl against
+     the live URL returning 200. RECORD THIS ONE FIRST — an end-to-end deploy is the
+     most convincing single artifact for a DevOps screen. -->
+
+| | |
+|---|---|
+| **Stack** | Docker · ECS Fargate · ECR · Application Load Balancer · GitHub Actions · CloudWatch |
+| **Pipeline** | Build (multi-platform) → tag by commit SHA → push to ECR → render task definition → deploy |
+| **Secrets** | AWS credentials in GitHub Secrets, never in the repository |
+
+---
 
 **Live demo:** [https://flask-ecs-fargate-cicd.onrender.com/health](https://flask-ecs-fargate-cicd.onrender.com/health)
 

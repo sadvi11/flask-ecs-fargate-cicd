@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build container image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Same multi-platform build the deploy uses, without pushing — proves the
+      # image builds on every commit with no AWS credentials involved.
+      - name: Build image (linux/amd64, no push)
+        run: docker buildx build --platform linux/amd64 -t flask-ecs-fargate:ci ./app

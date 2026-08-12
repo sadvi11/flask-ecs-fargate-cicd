@@ -1,20 +1,48 @@
 # Flask ECS Fargate CI/CD
 
-> Production-grade containerized API deployed on AWS ECS Fargate with fully automated CI/CD pipeline via GitHub Actions. Every push to `main` builds, pushes to ECR, and deploys to ECS automatically — zero manual steps.
+[![CI](https://github.com/sadvi11/flask-ecs-fargate-cicd/actions/workflows/ci.yml/badge.svg)](https://github.com/sadvi11/flask-ecs-fargate-cicd/actions/workflows/ci.yml)
+![AWS](https://img.shields.io/badge/AWS-ECS%20Fargate%20·%20ECR-FF9900?logo=amazonaws&logoColor=white)
+![Region](https://img.shields.io/badge/Region-ca--central--1-232F3E)
+![Auth](https://img.shields.io/badge/AWS%20auth-OIDC%20·%20no%20stored%20keys-3ecca0)
+![Tags](https://img.shields.io/badge/Images-SHA--tagged-2088ff)
+![License](https://img.shields.io/badge/License-MIT-green)
 
-**Live demo:** [https://flask-ecs-fargate-cicd.onrender.com/health](https://flask-ecs-fargate-cicd.onrender.com/health)
+> A containerized Python API on AWS ECS Fargate, built and tested by GitHub Actions on
+> every commit and released to ECR and ECS through a pipeline that stores no AWS
+> credentials.
 
+**Live demo:** [flask-ecs-fargate-cicd.onrender.com/health](https://flask-ecs-fargate-cicd.onrender.com/health)
+· *(free tier — the first request after an idle period cold-starts and can take ~15s)*
+
+---
+
+## What runs automatically, and what does not
+
+Being precise about this, because "fully automated" is easy to claim and easy to check.
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| [`ci.yml`](.github/workflows/ci.yml) | **Every push and PR** | Installs, runs tests, builds the image. Fails the commit if any step fails. |
+| [`deploy.yml`](.github/workflows/deploy.yml) | **Manual** (`workflow_dispatch`) | Builds, pushes to ECR, renders a new task definition and rolls out to ECS. |
+
+Deployment is deliberately manual rather than on every push. It targets a live ECS
+cluster, and a public repository whose CI requires a funded AWS account to stay green
+is a repository that goes red the moment the account is torn down. CI proves the code;
+deploy is invoked when a deploy is actually wanted.
 
 ---
 
 ## What this project demonstrates
 
 - Containerizing a Python Flask API with Docker (multi-platform `linux/amd64` build)
-- Storing container images in Amazon ECR with versioned tags per commit SHA 
+- Storing container images in Amazon ECR with versioned tags per commit SHA
 - Running containers serverlessly on AWS ECS Fargate — no EC2 instances to manage
-- Automated CI/CD: GitHub Actions pipeline deploys on every push to `main`
+- Rolling deployment to ECS with `wait-for-service-stability`, so the pipeline fails
+  rather than reporting success while the new task definition never stabilises
 - CloudWatch logging for production observability
-- Security: AWS credentials stored as GitHub Secrets, never in code
+- **No AWS credential is stored anywhere.** Authentication is OIDC federation — GitHub
+  presents a signed token, AWS validates it against a trust policy scoped to this
+  repository, and returns credentials that expire
 
 ---
  
@@ -131,8 +159,19 @@ flask-ecs-fargate-cicd/
 
 ## Security practices
 
-- AWS credentials stored as GitHub Secrets — never in code or config files
-- Account ID injected at pipeline runtime via `sed` — never committed to repo
+**There is no AWS access key in this repository or in its settings.** The pipeline
+authenticates by OIDC workload identity federation: GitHub mints a short-lived signed
+token, AWS validates it against a trust policy that names this specific repository,
+and returns temporary credentials. Nothing persists between runs.
+
+That removes three failure modes at once. There is no key to leak. There is no
+rotation task to forget. And a fork or a pull request from an outside contributor
+cannot obtain credentials, because the trust policy is scoped to this repository —
+which a stored secret in an unprotected workflow would not have prevented.
+
+- **OIDC federation, no long-lived credentials** — the only configured value is the
+  role ARN, which is not a secret and is useless without the matching trust policy
+- Account ID is never committed — it is resolved at runtime from the ECR login output
 - Task definition downloaded live from AWS during deployment — no stale configs
 - IAM execution role follows least-privilege — only ECR pull and CloudWatch write
 - Security group restricts inbound to port 8080 only
@@ -164,12 +203,51 @@ aws logs create-log-group \
   --region ca-central-1
 ```
 
-**4. Add GitHub Secrets:**
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-- `AWS_ACCOUNT_ID`
+**4. Create the OIDC trust so GitHub can authenticate without a key.**
 
-**5. Push to main — pipeline runs automatically.**
+Register GitHub as an identity provider in IAM (once per AWS account):
+
+```bash
+aws iam create-open-id-connect-provider \
+  --url https://token.actions.githubusercontent.com \
+  --client-id-list sts.amazonaws.com
+```
+
+Then create a role whose trust policy names **this repository**. The `sub` condition is
+the important line — without it, any repository on GitHub could assume the role:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": { "Federated": "arn:aws:iam::<ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com" },
+    "Action": "sts:AssumeRoleWithWebIdentity",
+    "Condition": {
+      "StringEquals": { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
+      "StringLike":   { "token.actions.githubusercontent.com:sub": "repo:sadvi11/flask-ecs-fargate-cicd:*" }
+    }
+  }]
+}
+```
+
+Attach permissions for ECR push and ECS deploy, scoped to the resources above rather
+than `*`.
+
+**5. Add one repository variable:** `AWS_DEPLOY_ROLE_ARN`, set to that role's ARN.
+
+That is the entire configuration. No access key, no secret key, no account ID.
+
+**6. Run the deploy workflow manually** from the Actions tab. If `AWS_DEPLOY_ROLE_ARN`
+is not set, the workflow reports that clearly and stops instead of failing partway
+through with a credentials error.
+
+> **Note on the `sub` claim.** The trust policy above uses the documented
+> `repo:owner/name:*` format. GitHub does not always present that exact string — in a
+> sibling project it presented a subject containing immutable numeric account and
+> repository IDs, and the role would not assume until the trust policy matched what was
+> actually sent. If federation fails with `AADSTS`-style "no matching identity", read
+> the real `sub` claim out of the failed run rather than trusting the documented shape.
 
 ---
 

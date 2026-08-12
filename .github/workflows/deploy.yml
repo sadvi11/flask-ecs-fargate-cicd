@@ -5,6 +5,14 @@ name: Deploy to Amazon ECS
 on:
   workflow_dispatch:
 
+# OIDC: GitHub mints a short-lived token that AWS exchanges for temporary
+# credentials. id-token: write is what allows the token to be requested.
+# Without it the federation step fails, so this is a required permission
+# and not an optional hardening step.
+permissions:
+  id-token: write
+  contents: read
+
 env:
   AWS_REGION: ca-central-1
   ECR_REPOSITORY: flask-ecs-fargate
@@ -13,19 +21,41 @@ env:
   CONTAINER_NAME: flask-ecs-fargate
 
 jobs:
+  # A job-level `if` cannot read the secrets context, so the check for a
+  # configured role has to happen inside a job and be published as an output.
+  check-config:
+    name: Check deploy target is configured
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - id: check
+        run: |
+          if [ -n "${{ secrets.AWS_DEPLOY_ROLE_ARN }}" ]; then
+            echo "configured=true" >> $GITHUB_OUTPUT
+          else
+            echo "configured=false" >> $GITHUB_OUTPUT
+            echo "::notice::AWS_DEPLOY_ROLE_ARN is not set. See README - deploying requires an IAM role that trusts this repository via OIDC."
+          fi
+
   deploy:
     name: Build and Deploy
+    needs: check-config
+    if: needs.check-config.outputs.configured == 'true'
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      # No access key exists. GitHub presents a signed OIDC token, AWS validates
+      # it against a trust policy scoped to this repository, and returns
+      # credentials that expire. There is nothing stored to leak or rotate.
+      - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: github-actions-ecs-deploy
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR

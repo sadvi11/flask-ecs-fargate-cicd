@@ -1,12 +1,17 @@
 # Architecture: Flask ECS Fargate CI/CD Pipeline
 
 GitHub renders this Mermaid diagram natively. It shows two views:
-1. **CI/CD pipeline flow** — what happens on every git push
+1. **Release pipeline flow** — what happens when a deploy is run
 2. **AWS runtime architecture** — how traffic flows to the running app
+
+> **Triggers.** `ci.yml` runs on **every push and pull request** — install, test, build.
+> The release pipeline below is `deploy.yml`, which is **manual**
+> (`workflow_dispatch`), because it targets a live ECS cluster and a public repository
+> should not go red the day the AWS account is torn down.
 
 ---
 
-## CI/CD Pipeline — triggered on every push to main
+## Release Pipeline — run manually from the Actions tab
 
 ```mermaid
 flowchart LR
@@ -16,7 +21,7 @@ flowchart LR
     Repo["Repository\n(main branch)"]
     subgraph Actions ["GitHub Actions Runner"]
       Step1["1. Checkout code"]
-      Step2["2. Configure\nAWS credentials\n(GitHub Secrets)"]
+      Step2["2. Assume role\nvia OIDC\n(no stored key)"]
       Step3["3. Login to\nAmazon ECR"]
       Step4["4. Build Docker image\nlinux/amd64\ntag: git commit SHA"]
       Step5["5. Push image\nto ECR"]
@@ -81,7 +86,7 @@ flowchart TB
 
   subgraph Security ["Security"]
     IAM["IAM Execution Role\necsTaskExecutionRole\nECR pull + CW write only"]
-    Secrets["GitHub Secrets\nAWS_ACCESS_KEY_ID\nAWS_SECRET_ACCESS_KEY\nAWS_ACCOUNT_ID"]
+    OIDC["OIDC Federation\nno stored access key\nshort-lived token, scoped to this repo"]
   end
 
   User --> URL
@@ -93,7 +98,7 @@ flowchart TB
   Container --> Health
   Container -->|"stdout logs"| CW
   IAM -->|"authorizes"| Container
-  Secrets -->|"injected at\npipeline runtime"| IAM
+  OIDC -->|"short-lived token\nexchanged at run time"| IAM
 ```
 
 ---
@@ -116,8 +121,8 @@ flowchart TB
 
 | Decision | Reason |
 |---|---|
-| AWS credentials in GitHub Secrets | Never stored in code or config files |
-| Account ID injected via `sed` at runtime | No account ID committed to repo |
+| OIDC federation, no stored access key | Nothing to leak, nothing to rotate; trust scoped to this repository |
+| Account ID resolved from the ECR login output at runtime | No account ID committed to repo |
 | Task definition fetched live from AWS | No stale config in repo, no drift |
 | IAM role: least privilege | Only ECR pull + CloudWatch write — nothing else |
 | `linux/amd64` build platform | ECS Fargate requires AMD64 — not ARM64 (Apple Silicon) |

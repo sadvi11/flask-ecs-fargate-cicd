@@ -14,44 +14,52 @@ GitHub renders this Mermaid diagram natively. It shows two views:
 ## Release Pipeline — run manually from the Actions tab
 
 ```mermaid
-flowchart LR
-  Dev(["Developer\npushes code"])
+flowchart TD
+  Dev(["Developer pushes code"])
 
-  subgraph GitHub ["GitHub"]
-    Repo["Repository\n(main branch)"]
-    subgraph Actions ["GitHub Actions Runner"]
-      Step1["1. Checkout code"]
-      Step2["2. Assume role\nvia OIDC\n(no stored key)"]
-      Step3["3. Login to\nAmazon ECR"]
-      Step4["4. Build Docker image\nlinux/amd64\ntag: git commit SHA"]
-      Step5["5. Push image\nto ECR"]
-      Step6["6. Fetch task def\nfrom AWS"]
-      Step7["7. Inject new\nimage URI"]
-      Step8["8. Deploy to ECS\nwait for stability"]
+  subgraph GitHub["GitHub"]
+    Repo["Repository<br/>main branch"]
+    subgraph Actions["GitHub Actions runner"]
+      direction TB
+      Step1["1 · Checkout code"]
+      Step2["2 · Assume role via OIDC<br/><b>no stored key</b>"]
+      Step3["3 · Login to Amazon ECR"]
+      Step4["4 · Build image · linux/amd64<br/>tag: git commit SHA"]
+      Step5["5 · Push image to ECR"]
+      Step6["6 · Fetch task definition from AWS"]
+      Step7["7 · Inject the new image URI"]
+      Step8["8 · Deploy to ECS<br/>wait for stability"]
+      Step1 --> Step2 --> Step3 --> Step4 --> Step5 --> Step6 --> Step7 --> Step8
     end
   end
 
-  subgraph AWS ["AWS — ca-central-1"]
-    ECR["Amazon ECR\nPrivate Registry\nimmutable tags"]
-    ECS["ECS Fargate Service\nflask-ecs-cluster\n1 task / 256 CPU / 512MB"]
-    CW["CloudWatch Logs\n/ecs/flask-ecs-fargate"]
-    IAM["IAM\necsTaskExecutionRole\nleast privilege"]
+  subgraph AWS["AWS — ca-central-1"]
+    ECR["Amazon ECR<br/>private registry · immutable tags"]
+    ECS["ECS Fargate service<br/>flask-ecs-cluster"]
+    CW["CloudWatch Logs<br/>/ecs/flask-ecs-fargate"]
+    IAM["IAM · ecsTaskExecutionRole<br/>least privilege"]
   end
 
-  Dev --> Repo
-  Repo --> Step1
-  Step1 --> Step2
-  Step2 --> Step3
-  Step3 --> Step4
-  Step4 --> Step5
-  Step5 --> Step6
-  Step6 --> Step7
-  Step7 --> Step8
+  Dev --> Repo --> Step1
   Step5 -->|"push image"| ECR
   Step8 -->|"update service"| ECS
   ECS -->|"pull image"| ECR
   ECS -->|"write logs"| CW
-  IAM -->|"grants ECR pull\n+ CloudWatch write"| ECS
+  IAM -->|"grants ECR pull + CloudWatch write"| ECS
+
+    linkStyle default stroke:#64748b,stroke-width:1.5px
+    classDef default fill:#f8fafc,stroke:#64748b,stroke-width:2px,color:#0f172a
+    classDef aws   fill:#fff7ed,stroke:#c2410c,stroke-width:3px,color:#7c2d12
+    classDef ci    fill:#f5f3ff,stroke:#6d28d9,stroke-width:3px,color:#4c1d95
+    classDef ok    fill:#dcfce7,stroke:#15803d,stroke-width:3px,color:#14532d
+    classDef warn  fill:#fef3c7,stroke:#b45309,stroke-width:3px,color:#78350f
+    class Step2 ok
+    class ECR,ECS aws
+    class CW ci
+    class IAM warn
+    style GitHub fill:#f1f5f9,stroke:#475569,stroke-width:2px,color:#0f172a
+    style Actions fill:#f5f3ff,stroke:#6d28d9,stroke-width:3px,color:#4c1d95
+    style AWS fill:#fff7ed,stroke:#c2410c,stroke-width:3px,color:#7c2d12
 ```
 
 ---
@@ -60,45 +68,51 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-  User(["User / Recruiter\nbrowser or curl"])
+  User(["User / recruiter<br/>browser or curl"])
 
-  subgraph Internet ["Public Internet"]
-    URL["https://flask-ecs-fargate-cicd\n.onrender.com\n\nDemo URL (Render)"]
-    AWSIP["http://ECS-PUBLIC-IP:8080\n\nDirect ECS task IP\n(changes on restart)"]
+  subgraph Internet["Public internet"]
+    URL["flask-ecs-fargate-cicd.onrender.com<br/><i>demo URL — Render</i>"]
+    AWSIP["ECS task public IP :8080<br/><i>changes on restart</i>"]
   end
 
-  subgraph VPC ["AWS VPC — Default (ca-central-1)"]
-    subgraph PublicSubnet ["Public Subnet"]
-      ENI["Elastic Network Interface\npublic IP assigned\nassignPublicIp: ENABLED"]
+  subgraph VPC["AWS VPC — default, ca-central-1"]
+    subgraph PublicSubnet["Public subnet"]
+      ENI["Elastic Network Interface<br/>assignPublicIp: ENABLED"]
     end
-
-    subgraph ECSFargate ["ECS Fargate Task"]
-      Container["Flask Container\ngunicorn 2 workers\nport 8080"]
-      Health["Health Check\nGET /health\nevery 30s"]
+    subgraph ECSFargate["ECS Fargate task"]
+      Container["Flask container<br/>gunicorn · 2 workers · port 8080"]
+      Health["Health check<br/>GET /health every 30s"]
     end
-
-    SG["Security Group\ninbound: TCP 8080\noutbound: all"]
+    SG["Security group<br/>inbound TCP 8080 · outbound all"]
   end
 
-  subgraph Monitoring ["Observability"]
-    CW["CloudWatch Logs\n/ecs/flask-ecs-fargate\nretention: 30 days"]
-  end
-
-  subgraph Security ["Security"]
-    IAM["IAM Execution Role\necsTaskExecutionRole\nECR pull + CW write only"]
-    OIDC["OIDC Federation\nno stored access key\nshort-lived token, scoped to this repo"]
-  end
+  CW["CloudWatch Logs<br/>/ecs/flask-ecs-fargate · 30-day retention"]
+  IAM["IAM execution role<br/>ECR pull + CloudWatch write only"]
+  OIDC["OIDC federation<br/><b>no stored access key</b><br/>short-lived, scoped to this repo"]
 
   User --> URL
   User --> AWSIP
   URL -->|"proxied"| Container
-  AWSIP --> ENI
-  ENI --> SG
-  SG --> Container
+  AWSIP --> ENI --> SG --> Container
   Container --> Health
   Container -->|"stdout logs"| CW
   IAM -->|"authorizes"| Container
-  OIDC -->|"short-lived token\nexchanged at run time"| IAM
+  OIDC -->|"token exchanged at run time"| IAM
+
+    linkStyle default stroke:#64748b,stroke-width:1.5px
+    classDef default fill:#f8fafc,stroke:#64748b,stroke-width:2px,color:#0f172a
+    classDef ci    fill:#f5f3ff,stroke:#6d28d9,stroke-width:3px,color:#4c1d95
+    classDef k8s   fill:#eef2ff,stroke:#1d4ed8,stroke-width:3px,color:#1e3a8a
+    classDef ok    fill:#dcfce7,stroke:#15803d,stroke-width:3px,color:#14532d
+    classDef warn  fill:#fef3c7,stroke:#b45309,stroke-width:3px,color:#78350f
+    class Container k8s
+    class SG,IAM warn
+    class OIDC ok
+    class CW ci
+    style Internet fill:#f1f5f9,stroke:#475569,stroke-width:2px,color:#0f172a
+    style VPC fill:#fff7ed,stroke:#c2410c,stroke-width:3px,color:#7c2d12
+    style PublicSubnet fill:#f1f5f9,stroke:#475569,stroke-width:2px,color:#0f172a
+    style ECSFargate fill:#f1f5f9,stroke:#475569,stroke-width:2px,color:#0f172a
 ```
 
 ---

@@ -75,7 +75,7 @@ flowchart LR
 | AWS IAM | Task execution role with least-privilege permissions |
 | Amazon CloudWatch | Container logs at `/ecs/flask-ecs-fargate` |
 | Amazon VPC | Network isolation with security groups |
-| GitHub Actions | CI/CD pipeline — build, push, deploy on every commit |
+| GitHub Actions | CI on every push/PR (lint, test, image build); manual deploy workflow |
 
 ---
 
@@ -122,7 +122,7 @@ Content-Type: application/json
 
 ## CI/CD pipeline — how it works
 
-The `.github/workflows/deploy.yml` pipeline runs on every push to `main`:
+The `.github/workflows/deploy.yml` pipeline is started manually (`workflow_dispatch`, see the table above) and does the following:
 
 1. **Build** — Docker image built for `linux/amd64` (required for Fargate)
 2. **Tag** — image tagged with Git commit SHA for traceability and rollback capability
@@ -134,27 +134,36 @@ The `.github/workflows/deploy.yml` pipeline runs on every push to `main`:
 ---
 
 ## Project structure
+
+```text
 flask-ecs-fargate-cicd/
-
 ├── app/
-
 │   ├── app.py                  # Flask API
+│   ├── requirements.txt        # Runtime dependencies
+│   └── Dockerfile              # Single-stage image, built for linux/amd64
+├── tests/
+│   └── test_app.py             # pytest suite (endpoints + input validation)
+├── .github/workflows/
+│   ├── ci.yml                  # ruff + pytest + image build, no AWS credentials
+│   └── deploy.yml              # manual build/push/deploy via OIDC
+├── requirements-dev.txt        # pytest, ruff
+├── ruff.toml
+├── diagrams/ARCHITECTURE.md
+└── WHY.md
+```
 
-│   ├── requirements.txt        # Python dependencies
+## Run the tests locally
 
-│   └── Dockerfile              # Multi-stage build for linux/amd64
+```bash
+python -m pip install -r app/requirements.txt -r requirements-dev.txt
+ruff check .
+pytest -q
+```
 
-├── .aws/
+`POST /calculate` returns HTTP 400 with an `error` message for a missing or non-JSON
+body, non-numeric or non-positive values, or values above the documented limits
+(principal ≤ 1,000,000,000, annual_rate ≤ 100, years ≤ 100).
 
-│   └── task-definition.json    # ECS task definition (ACCOUNT_ID placeholder)
-
-├── .github/
-
-│   └── workflows/
-
-│       └── deploy.yml          # GitHub Actions CI/CD pipeline
-
-└── README.md
 ---
 
 ## Security practices
